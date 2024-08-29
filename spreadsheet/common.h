@@ -39,22 +39,50 @@ public:
     enum class Category {
         Ref,    // ссылка на ячейку с некорректной позицией
         Value,  // ячейка не может быть трактована как число
-        Div0,  // в результате вычисления возникло деление на ноль
+        Arithmetic,  // в результате вычисления возникло деление на ноль
     };
 
-    FormulaError(Category category);
+    FormulaError(Category category) :
+        category_(category)
+    {}
 
-    Category GetCategory() const;
+    Category GetCategory() const { return category_; }
 
-    bool operator==(FormulaError rhs) const;
+    bool operator==(FormulaError rhs) const { return rhs.ToString() == rhs.ToString(); }
 
-    std::string_view ToString() const;
+    std::string_view ToString() const {
+        using namespace std::literals;
+        switch (category_)
+        {
+        case FormulaError::Category::Ref: return "#REF!"sv;
+        case FormulaError::Category::Value: return "#VALUE!"sv;
+        case FormulaError::Category::Arithmetic: return "#ARITHM!"sv;
+        default: break;
+        }
+        return ""sv;
+    }
 
 private:
     Category category_;
 };
 
 std::ostream& operator<<(std::ostream& output, FormulaError fe);
+
+class FormulaErrorException : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+
+public:
+    explicit FormulaErrorException(std::string error, FormulaError::Category category) :
+        std::runtime_error(error),
+        category_(category)
+    {}
+
+    FormulaError::Category GetCategory() const { return category_; }
+
+private:
+    FormulaError::Category category_;
+};
 
 // Исключение, выбрасываемое при попытке передать в метод некорректную позицию
 class InvalidPositionException : public std::out_of_range {
