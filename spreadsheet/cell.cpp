@@ -18,52 +18,29 @@ void Cell::Set(std::string text) {
         return;
     }
 
-    // Признак, что текст ячейки - формула
-    bool is_formula = (!text.empty() && text.at(0) == '=' && text.size() > 1);
-    std::unique_ptr<FormulaInterface> formula;
-    if (is_formula) {
-        // Парсим формулу
-        formula = ParseFormula(std::string(text.begin() + 1, text.end()));
-        // Выполняем проверку на наличие циклической зависимости в новой формуле
-        if (CheckCircularDependency(formula->GetReferencedCells())) {
+    // Создаем новую реализацию ячейки
+    std::unique_ptr<Impl> new_impl;
+    if (FormulaImpl::IsFormulaText(text)) {
+        auto new_formula_impl = std::make_unique<FormulaImpl>(text, *sheet_);
+        if (CheckCircularDependency(new_formula_impl->GetReferencedCells())) {
             throw CircularDependencyException("Invalid formula: found circular dependency"s);
         }
+        new_impl = std::move(new_formula_impl);
+    } else {
+        new_impl = std::make_unique<TextImpl>(std::move(text));
     }
 
     // Сбрасываем кэш
     InvalidateCache();
 
-    // У ячеек, от которых зависело значение тек. ячейки: убираем связь
-    for (auto referenced_cell : GetReferencedCells()) {
-        if (!referenced_cell.IsValid()) {
-            continue;
-        }
-        auto cell = dynamic_cast<Cell*>(sheet_->GetCell(referenced_cell));
-        if (cell) {
-            cell->cells_from_.erase(this);
-        }
-    }
+    // Очищаем связи
+    ClearLinksFrom();
 
-    // Определяем новую реализацию
-    if (is_formula) {
-        impl_ = std::make_unique<FormulaImpl>(text, std::move(formula), *sheet_);
+    // Устанавливаем новую реализацию ячейки
+    impl_ = std::move(new_impl);
 
-        // У ячеек, от которых зависит значение тек. ячейки: устанавливаем связь к тек. ячейке
-        for (auto referenced_cell : GetReferencedCells()) {
-            if (!referenced_cell.IsValid()) {
-                continue;
-            }
-            // Если ячейки из формулы не существует: создаем пустую ячейку
-            auto cell = dynamic_cast<Cell*>(sheet_->GetCell(referenced_cell));
-            if (!cell) {
-                sheet_->SetCell(referenced_cell, ""s);
-                cell = dynamic_cast<Cell*>(sheet_->GetCell(referenced_cell));
-            }
-            cell->cells_from_.insert(this);
-        }
-    } else {
-        impl_ = std::make_unique<TextImpl>(std::move(text));
-    }
+    // Устанавливаем связи
+    CreateLinksFrom();
 }
 
 void Cell::Clear() {
@@ -98,6 +75,35 @@ void Cell::InvalidateCache() {
     // Если были ячейки, которые зависят от текущей ячейки: сбрасываем их кэш значений тоже
     for (auto cell_from : cells_from_) {
         cell_from->InvalidateCache();
+    }
+}
+
+void Cell::ClearLinksFrom() {
+    // У ячеек, от которых зависело значение тек. ячейки: убираем связь
+    for (auto referenced_cell : GetReferencedCells()) {
+        if (!referenced_cell.IsValid()) {
+            continue;
+        }
+        auto cell = dynamic_cast<Cell*>(sheet_->GetCell(referenced_cell));
+        if (cell) {
+            cell->cells_from_.erase(this);
+        }
+    }
+}
+
+void Cell::CreateLinksFrom() {
+    // У ячеек, от которых зависит значение тек. ячейки: устанавливаем связь к тек. ячейке
+    for (auto referenced_cell : GetReferencedCells()) {
+        if (!referenced_cell.IsValid()) {
+            continue;
+        }
+        // Если ячейки из формулы не существует: создаем пустую ячейку
+        auto cell = dynamic_cast<Cell*>(sheet_->GetCell(referenced_cell));
+        if (!cell) {
+            sheet_->SetCell(referenced_cell, ""s);
+            cell = dynamic_cast<Cell*>(sheet_->GetCell(referenced_cell));
+        }
+        cell->cells_from_.insert(this);
     }
 }
 

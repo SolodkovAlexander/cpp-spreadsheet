@@ -64,10 +64,14 @@ private:
             std::string text_;
     };
     class FormulaImpl final : public Impl {
+        private:
+            // Символ начала формулы в тексте
+            static const char FORMULA_SIGN = '=';
+
         public:
-            FormulaImpl(std::string text, std::unique_ptr<FormulaInterface> formula, const SheetInterface& sheet) :
+            FormulaImpl(std::string text, const SheetInterface& sheet) :
                 text_(text),
-                formula_(std::move(formula)),
+                formula_(std::move(ParseFormula(std::string(text.begin() + 1, text.end())))),
                 sheet_(sheet) 
             {}
             
@@ -89,6 +93,7 @@ private:
             std::string GetInitialText() const override { return text_; }
             void InvalidateCache() const override { value_cache_ = std::nullopt; }
             std::vector<Position> GetReferencedCells() const { return formula_->GetReferencedCells(); }
+            static bool IsFormulaText(std::string text) { return (!text.empty() && text.at(0) == FORMULA_SIGN && text.size() > 1); };
 
         private: 
             std::string text_;
@@ -102,6 +107,8 @@ private:
 
 private:
     void InvalidateCache();
+    void ClearLinksFrom();
+    void CreateLinksFrom();
     bool CheckCircularDependency(const std::vector<Position>& referenced_cells) const;
     bool CheckCircularDependency(Position cell_position, std::vector<Position>& checked_cells) const;
 
