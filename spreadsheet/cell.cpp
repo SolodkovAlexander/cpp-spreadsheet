@@ -20,14 +20,17 @@ void Cell::Set(std::string text) {
 
     // Создаем новую реализацию ячейки
     std::unique_ptr<Impl> new_impl;
-    if (FormulaImpl::IsFormulaText(text)) {
-        auto new_formula_impl = std::make_unique<FormulaImpl>(text, *sheet_);
-        if (CheckCircularDependency(new_formula_impl->GetReferencedCells())) {
-            throw CircularDependencyException("Invalid formula: found circular dependency"s);
-        }
-        new_impl = std::move(new_formula_impl);
+    if (text.empty()) {
+        new_impl = std::make_unique<TextImpl>();
+    } else if (FormulaImpl::IsFormulaText(text)) {
+        new_impl = std::make_unique<FormulaImpl>(text, *sheet_);
     } else {
         new_impl = std::make_unique<TextImpl>(std::move(text));
+    }
+
+    // Проверяем наличие цикл. зависимости
+    if (CheckCircularDependency(new_impl->GetReferencedCells())) {
+        throw CircularDependencyException("Found circular dependency"s);
     }
 
     // Сбрасываем кэш

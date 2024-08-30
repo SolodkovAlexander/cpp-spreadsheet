@@ -38,6 +38,7 @@ private:
             virtual std::string GetText() const = 0;
             virtual std::string GetInitialText() const = 0;
             virtual void InvalidateCache() const {}
+            virtual std::vector<Position> GetReferencedCells() const { return {}; }
     };
     class EmptyImpl final : public Impl {
         public:
@@ -47,7 +48,7 @@ private:
     };
     class TextImpl final : public Impl {
         public:
-            TextImpl(std::string text) :
+            TextImpl(std::string text = ""s) :
                 text_(text) 
             {}
 
@@ -92,7 +93,7 @@ private:
             std::string GetText() const override { return '=' + formula_->GetExpression(); }
             std::string GetInitialText() const override { return text_; }
             void InvalidateCache() const override { value_cache_ = std::nullopt; }
-            std::vector<Position> GetReferencedCells() const { return formula_->GetReferencedCells(); }
+            std::vector<Position> GetReferencedCells() const override { return formula_->GetReferencedCells(); }
             static bool IsFormulaText(std::string text) { return (!text.empty() && text.at(0) == FORMULA_SIGN && text.size() > 1); };
 
         private: 
